@@ -15,6 +15,8 @@ from utilities.dataset import prepare_data, Dataset
 from utilities.utils import *
 from tqdm import tqdm
 
+from matplotlib import pyplot as plt
+
 def str2bool(x):
     return x.lower() in ['true', '1', 'y', 'yes']
 
@@ -22,14 +24,14 @@ parser = argparse.ArgumentParser(description="DnCNN")
 parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
 parser.add_argument("--batchSize", type=int, default=128, help="Training batch size")
 parser.add_argument("--num_of_layers", type=int, default=17, help="Number of total layers")
-parser.add_argument("--lip", type=float, default=0.0, help="Lipschitz constraint. Default not using.")
+parser.add_argument("--lip", type=float, default=1.0, help="Lipschitz constraint. Default not using.")
 parser.add_argument("--adaptive", type=str2bool, default=False, help="adaptive sn for different layers.")
 parser.add_argument("--no_bn", type=str2bool, default=False, help="Whether use BN or not.")
 parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
 parser.add_argument("--milestone", type=int, default=25, help="When to decay learning rate; should be less than epochs")
 parser.add_argument("--lr", type=float, default=1e-3, help="Initial learning rate")
 parser.add_argument("--outf", type=str, default="logs", help='path of log files')
-parser.add_argument("--mode", type=str, default="S", help='with known noise level (S) or blind training (B)')
+parser.add_argument("--mode", type=str, default="B", help='with known noise level (S) or blind training (B)')
 parser.add_argument("--noiseL", type=int, default=40, help='noise level; ignored when mode=B')
 parser.add_argument("--val_noiseL", type=float, default=40, help='noise level used on validation set')
 parser.add_argument("--gpu", type=int, default=0, help='GPU index')
@@ -45,7 +47,8 @@ def Load_Model(model, arg1, arg2, arg3):
     return model.load_state_dict(torch.load(os.path.join('logs', arg1, arg2, arg3)))
 
 def main():
-    noiseL_B = [15,45]  # ingnored when opt.mode=='S'
+    # noiseL_B = [15,45]  # ingnored when opt.mode=='S'
+    noiseL_B = [0.3187, 1.2750]
     if opt.mode == 'B':
         sigma = noiseL_B
     else:
@@ -76,7 +79,6 @@ def main():
     writer = SummaryWriter(save_path)
     step = 0
 
-    # for epoch in range(opt.epochs):
     for epoch in range(opt.epochs):
         if epoch < opt.milestone:
             current_lr = opt.lr
@@ -105,6 +107,22 @@ def main():
             img_train, imgn_train = Variable(img_train.cuda()), Variable(imgn_train.cuda())
             noise = Variable(noise.cuda())
             out_train = model(imgn_train)
+
+            # # Plot the images
+            # plt.close('all')
+            # plt.figure()
+            # plt.imshow(img_train[0].detach().cpu().numpy().squeeze(), cmap='gray')
+            # plt.title('Original image')
+            # plt.colorbar()
+            # plt.figure()
+            # plt.imshow(imgn_train[0].detach().cpu().numpy().squeeze(), cmap='gray')
+            # plt.title('Noisy image')
+            # plt.colorbar()
+            # plt.figure()
+            # plt.imshow(out_train[0].detach().cpu().numpy().squeeze(), cmap='gray')
+            # plt.title('Pred image')
+            # plt.colorbar()
+            # plt.show()
 
             loss = criterion(out_train, noise) / (imgn_train.size()[0]*2)
             loss.backward()
@@ -138,7 +156,7 @@ def main():
                 for n in range(noise.size()[0]):
                     sizeN = noise[0,:,:,:].size()
                     noise[n,:,:,:] = torch.FloatTensor(sizeN).normal_(mean=0, std=stdN[n]/255.)
-            # noise = torch.FloatTensor(img_val.size()).normal_(mean=0, std=opt.val_noiseL/255.)
+
             imgn_val = img_val + noise
             img_val, imgn_val = Variable(img_val.cuda()), Variable(imgn_val.cuda())
             out_val = torch.clamp(imgn_val-model(imgn_val), 0., 1.)
@@ -160,10 +178,7 @@ def main():
         writer.add_image('clean image', Img, epoch)
         writer.add_image('noisy image', Imgn, epoch)
         writer.add_image('reconstructed image', Irecon, epoch)
-        # save model
-        # model_name = 'epoch{:d}_noise{:d}_PSNR{:.2f}_SSIM{:.2f}.pth'.format(epoch + 1, opt.noiseL, psnr_val, ssim_val)
-        # torch.save(model.state_dict(), os.path.join(save_path, model_name))
-
+       
         if opt.mode == 'B':
             model_name = 'epoch{:d}_noise{}_PSNR{:.2f}_SSIM{:.2f}.pth'.format(epoch+1, noiseL_B, psnr_val, ssim_val)
         else:

@@ -2,7 +2,9 @@ import math
 import torch
 import torch.nn as nn
 import numpy as np
-from skimage.measure import compare_psnr, compare_ssim
+# from skimage.measure import compare_psnr, compare_ssim
+from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import peak_signal_noise_ratio as psnr
 import torch.nn.parallel
 from torch.nn.functional import normalize
 import torch.optim
@@ -30,7 +32,7 @@ def batch_PSNR(img, imclean, data_range):
     Iclean = imclean.data.cpu().numpy().astype(np.float32)
     PSNR = 0
     for i in range(Img.shape[0]):
-        PSNR += compare_psnr(Iclean[i,:,:,:], Img[i,:,:,:], data_range=data_range)
+        PSNR += psnr(Iclean[i,:,:,:], Img[i,:,:,:], data_range=data_range)
     return (PSNR/Img.shape[0])
 
 def batch_SSIM(img, imclean, data_range):
@@ -40,7 +42,7 @@ def batch_SSIM(img, imclean, data_range):
     Iclean = imclean.data.cpu().numpy().astype(np.float32)
     SSIM = 0
     for i in range(Img.shape[0]):
-        SSIM += compare_ssim(Iclean[i,:,:,:], Img[i,:,:,:], data_range=data_range, multichannel=True)
+        SSIM += ssim(Iclean[i,:,:,:], Img[i,:,:,:], data_range=data_range, multichannel=True)
     return (SSIM/Img.shape[0])
 
 def data_augmentation(image, mode):
